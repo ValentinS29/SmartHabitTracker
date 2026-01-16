@@ -10,18 +10,27 @@ import {
 } from "react-native";
 import { LoginScreen } from "./src/screens/LoginScreen";
 import { RegisterScreen } from "./src/screens/RegisterScreen";
-import { TodayScreen } from "./src/screens/TodayScreen.tsx";
-import { HabitsScreen } from "./src/screens/HabitsScreen.tsx";
-import { ProfileScreen } from "./src/screens/ProfileScreen.tsx";
-import { AddEditHabitScreen } from "./src/screens/AddEditHabitScreen.tsx";
+import { TodayScreen } from "./src/screens/TodayScreen";
+import { HabitsScreen } from "./src/screens/HabitsScreen";
+import { ProfileScreen } from "./src/screens/ProfileScreen";
+import { RewardsScreen } from "./src/screens/RewardsScreen";
+import { AddEditHabitScreen } from "./src/screens/AddEditHabitScreen";
 import { useAuthStore } from "./src/store/auth/authStore";
 import { useHabitsStore } from "./src/store/habits/habitsStore";
 import { usePlayerStore } from "./src/store/player/playerStore";
+import { initializeBadges } from "./src/services/gamification/achievementService";
+import {
+  generateDailyQuests,
+  generateWeeklyQuests,
+  needsWeeklyQuests,
+  cleanupOldQuests,
+} from "./src/services/gamification/questService";
 
 export default function App() {
   const { initialize, isLoading, user } = useAuthStore();
-  const { loadData } = useHabitsStore();
-  const { loadPlayer } = usePlayerStore();
+  const { loadData, habits } = useHabitsStore();
+  const { loadPlayer, badges, quests, unlockBadges, updateQuests } =
+    usePlayerStore();
   const [showRegister, setShowRegister] = useState(false);
   const [activeTab, setActiveTab] = useState("today");
   const [showAddEditModal, setShowAddEditModal] = useState(false);
@@ -39,6 +48,50 @@ export default function App() {
       loadPlayer(user.id); // Phase 2
     }
   }, [user]);
+
+  // Phase 3: Initialize badges and quests after player loads
+  useEffect(() => {
+    if (user && badges.length === 0 && habits.length >= 0) {
+      console.log("🎮 [APP] Initializing badges for first time");
+      const initialBadges = initializeBadges();
+      unlockBadges(initialBadges);
+    }
+  }, [user, badges.length, habits.length]);
+
+  // Phase 3: Generate daily quests if needed
+  useEffect(() => {
+    if (user && habits.length > 0) {
+      const today = new Date();
+      const dateKey = `${today.getFullYear()}-${String(
+        today.getMonth() + 1
+      ).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+
+      // Check if we need to generate daily quests
+      const hasTodayQuests = quests.some(
+        (q) => q.type === "daily" && q.dateKey === dateKey
+      );
+
+      if (!hasTodayQuests) {
+        console.log("🎯 [APP] Generating daily quests for", dateKey);
+        const dailyQuests = generateDailyQuests(dateKey, habits);
+        updateQuests([...quests, ...dailyQuests]);
+      }
+
+      // Check if we need to generate weekly quests
+      if (needsWeeklyQuests(quests)) {
+        console.log("📅 [APP] Generating weekly quests");
+        const weeklyQuests = generateWeeklyQuests(habits);
+        updateQuests([...quests, ...weeklyQuests]);
+      }
+
+      // Cleanup old quests
+      const cleanedQuests = cleanupOldQuests(quests);
+      if (cleanedQuests.length !== quests.length) {
+        console.log("🧹 [APP] Cleaning up old quests");
+        updateQuests(cleanedQuests);
+      }
+    }
+  }, [user, habits.length, quests.length]);
 
   if (isLoading) {
     return (
@@ -75,6 +128,7 @@ export default function App() {
               onEditHabit={handleEditHabit}
             />
           )}
+          {activeTab === "rewards" && <RewardsScreen />}
           {activeTab === "profile" && <ProfileScreen />}
         </View>
 
@@ -101,6 +155,18 @@ export default function App() {
               }
             >
               Habits
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.tab}
+            onPress={() => setActiveTab("rewards")}
+          >
+            <Text
+              style={
+                activeTab === "rewards" ? styles.tabTextActive : styles.tabText
+              }
+            >
+              Rewards
             </Text>
           </TouchableOpacity>
           <TouchableOpacity

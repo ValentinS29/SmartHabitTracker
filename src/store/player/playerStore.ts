@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { Player } from "../../types";
+import { Player, Badge, Quest } from "../../types";
 import * as storageService from "../../services/storage/storageService";
 import {
   computeLevelFromXP,
@@ -10,6 +10,9 @@ import {
 
 interface PlayerState extends Player {
   isLoading: boolean;
+  perfectDayDates: string[]; // Phase 3: track dates for achievements
+  badges: Badge[]; // Phase 3: stored separately but part of state
+  quests: Quest[]; // Phase 3: stored separately but part of state
 
   // Derived values
   xpIntoLevel: number;
@@ -22,6 +25,14 @@ interface PlayerState extends Player {
   removeXP: (amount: number) => Promise<void>;
   awardDailyPerfect: (dateKey: string) => Promise<void>;
   removeDailyPerfect: () => Promise<void>;
+
+  // Phase 3: Badge actions
+  unlockBadges: (newBadges: Badge[]) => Promise<void>;
+
+  // Phase 3: Quest actions
+  updateQuests: (quests: Quest[]) => Promise<void>;
+  completeQuest: (questId: string, xpReward: number) => Promise<void>;
+
   resetPlayer: () => Promise<void>;
 }
 
@@ -37,7 +48,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   xpTotal: 0,
   level: 1,
   lastDailyPerfectDateKey: null,
+  badges: [],
+  quests: [],
   isLoading: false,
+  perfectDayDates: [], // Phase 3
 
   // Derived values
   xpIntoLevel: 0,
@@ -58,6 +72,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         await storageService.savePlayer(player);
       }
 
+      // Phase 3: Load badges, quests, and perfect day dates
+      const badges = await storageService.loadBadges(userId);
+      const quests = await storageService.loadQuests(userId);
+      const perfectDayDates = await storageService.loadPerfectDays(userId);
+
       // Calculate derived values
       const level = computeLevelFromXP(player.xpTotal);
       const xpIntoLevel = getXPIntoLevel(player.xpTotal, level);
@@ -66,6 +85,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
       set({
         ...player,
+        badges,
+        quests,
+        perfectDayDates,
         level,
         xpIntoLevel,
         xpToNextLevel,
@@ -77,7 +99,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         "✅ [PLAYER STORE] Player loaded - Level:",
         level,
         "XP:",
-        player.xpTotal
+        player.xpTotal,
+        "Badges:",
+        badges.length,
+        "Quests:",
+        quests.length
       );
     } catch (error: any) {
       console.error("❌ [PLAYER STORE] Load error:", error.message);
@@ -108,6 +134,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       };
 
       set({
+        ...state,
         ...updatedPlayer,
         xpIntoLevel,
         xpToNextLevel,
@@ -147,6 +174,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       };
 
       set({
+        ...state,
         ...updatedPlayer,
         xpIntoLevel,
         xpToNextLevel,
@@ -171,12 +199,25 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
       console.log("🎉 [PLAYER STORE] Daily Perfect bonus awarded!");
 
+      // Phase 3: Track perfect day date for achievements
+      const updatedPerfectDays = [...state.perfectDayDates];
+      if (!updatedPerfectDays.includes(dateKey)) {
+        updatedPerfectDays.push(dateKey);
+        await storageService.savePerfectDays(state.userId, updatedPerfectDays);
+      }
+
       const updatedPlayer: Player = {
-        ...state,
+        userId: state.userId,
+        xpTotal: state.xpTotal,
+        level: state.level,
         lastDailyPerfectDateKey: dateKey,
       };
 
-      set({ lastDailyPerfectDateKey: dateKey });
+      set({
+        ...state,
+        lastDailyPerfectDateKey: dateKey,
+        perfectDayDates: updatedPerfectDays,
+      });
       await storageService.savePlayer(updatedPlayer);
 
       // Add XP (will trigger recalculation)
@@ -200,11 +241,13 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       console.log("🎮 [PLAYER STORE] Removing Daily Perfect bonus");
 
       const updatedPlayer: Player = {
-        ...state,
+        userId: state.userId,
+        xpTotal: state.xpTotal,
+        level: state.level,
         lastDailyPerfectDateKey: null,
       };
 
-      set({ lastDailyPerfectDateKey: null });
+      set({ ...state, lastDailyPerfectDateKey: null });
       await storageService.savePlayer(updatedPlayer);
 
       // Remove XP
@@ -233,6 +276,63 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       console.log("🎮 [PLAYER STORE] Player reset");
     } catch (error: any) {
       console.error("❌ [PLAYER STORE] Reset error:", error.message);
+    }
+  },
+
+  // Phase 3: Badge management
+  unlockBadges: async (newBadges: Badge[]) => {
+    try {
+      const state = get();
+      const updatedBadges = [...state.badges];
+
+      newBadges.forEach((newBadge) => {
+        const existingIndex = updatedBadges.findIndex(
+          (b) => b.id === newBadge.id
+        );
+        if (existingIndex >= 0) {
+          updatedBadges[existingIndex] = newBadge;
+        } else {
+          updatedBadges.push(newBadge);
+        }
+      });
+
+      set({ badges: updatedBadges });
+      await storageService.saveBadges(state.userId, updatedBadges);
+
+      console.log(`🏅 [PLAYER STORE] Unlocked ${newBadges.length} badge(s)`);
+    } catch (error: any) {
+      console.error("❌ [PLAYER STORE] Unlock badges error:", error.message);
+    }
+  },
+
+  // Phase 3: Quest management
+  updateQuests: async (quests: Quest[]) => {
+    try {
+      const state = get();
+      set({ quests });
+      await storageService.saveQuests(state.userId, quests);
+      console.log(`✅ [PLAYER STORE] Updated quests: ${quests.length}`);
+    } catch (error: any) {
+      console.error("❌ [PLAYER STORE] Update quests error:", error.message);
+    }
+  },
+
+  completeQuest: async (questId: string, xpReward: number) => {
+    try {
+      const state = get();
+      const updatedQuests = state.quests.map((q) =>
+        q.id === questId ? { ...q, completed: true } : q
+      );
+
+      set({ quests: updatedQuests });
+      await storageService.saveQuests(state.userId, updatedQuests);
+
+      // Award XP
+      await get().addXP(xpReward);
+
+      console.log(`🎯 [PLAYER STORE] Quest completed: +${xpReward} XP`);
+    } catch (error: any) {
+      console.error("❌ [PLAYER STORE] Complete quest error:", error.message);
     }
   },
 }));

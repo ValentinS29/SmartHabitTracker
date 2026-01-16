@@ -8,8 +8,15 @@ import { getRequiredXP } from "../services/gamification/levelService";
 
 export const ProfileScreen: React.FC = () => {
   const { user, logout } = useAuthStore();
-  const { level, xpTotal, xpIntoLevel, xpToNextLevel, levelProgress } =
-    usePlayerStore();
+  const {
+    level,
+    xpTotal,
+    xpIntoLevel,
+    xpToNextLevel,
+    levelProgress,
+    badges,
+    quests,
+  } = usePlayerStore();
 
   const handleLogout = () => {
     Alert.alert("Logout", "Are you sure you want to logout?", [
@@ -59,6 +66,20 @@ export const ProfileScreen: React.FC = () => {
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Total XP</Text>
           <Text style={styles.sectionValue}>{xpTotal}</Text>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Badges</Text>
+          <Text style={styles.sectionValue}>
+            {badges.filter((b) => b.unlocked).length} / {badges.length} unlocked
+          </Text>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Active Quests</Text>
+          <Text style={styles.sectionValue}>
+            {quests.filter((q) => !q.completed).length} quests
+          </Text>
         </View>
 
         <View style={styles.section}>

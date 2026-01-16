@@ -1,11 +1,14 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Habit, Completion, User, Player } from "../../types";
+import { Habit, Completion, User, Player, Badge, Quest } from "../../types";
 
 const STORAGE_KEYS = {
   HABITS: "@smart_habit_tracker/habits:v2", // Phase 2: versioned
   COMPLETIONS: "@smart_habit_tracker/completions:v2", // Phase 2: versioned
   USER: "@smart_habit_tracker/user",
   PLAYER: "@smart_habit_tracker/player:v1", // Phase 2: new
+  BADGES: "@smart_habit_tracker/badges:v1", // Phase 3: new
+  QUESTS: "@smart_habit_tracker/quests:v1", // Phase 3: new
+  PERFECT_DAYS: "@smart_habit_tracker/perfect_days:v1", // Phase 3: track Daily Perfect dates
 };
 
 export const saveHabits = async (habits: Habit[]): Promise<void> => {
@@ -82,4 +85,61 @@ export const loadPlayer = async (userId: string): Promise<Player | null> => {
     player ? `Level ${player.level}` : "None"
   );
   return player;
+};
+
+// Phase 3: Badges storage
+export const saveBadges = async (
+  userId: string,
+  badges: Badge[]
+): Promise<void> => {
+  console.log("💾 [STORAGE] Saving badges:", badges.length);
+  const key = `${STORAGE_KEYS.BADGES}:${userId}`;
+  await AsyncStorage.setItem(key, JSON.stringify(badges));
+};
+
+export const loadBadges = async (userId: string): Promise<Badge[]> => {
+  console.log("💾 [STORAGE] Loading badges for:", userId);
+  const key = `${STORAGE_KEYS.BADGES}:${userId}`;
+  const data = await AsyncStorage.getItem(key);
+  const badges = data ? JSON.parse(data) : [];
+  console.log("💾 [STORAGE] Loaded badges:", badges.length);
+  return badges;
+};
+
+// Phase 3: Quests storage
+export const saveQuests = async (
+  userId: string,
+  quests: Quest[]
+): Promise<void> => {
+  console.log("💾 [STORAGE] Saving quests:", quests.length);
+  const key = `${STORAGE_KEYS.QUESTS}:${userId}`;
+  await AsyncStorage.setItem(key, JSON.stringify(quests));
+};
+
+export const loadQuests = async (userId: string): Promise<Quest[]> => {
+  console.log("💾 [STORAGE] Loading quests for:", userId);
+  const key = `${STORAGE_KEYS.QUESTS}:${userId}`;
+  const data = await AsyncStorage.getItem(key);
+  const quests = data ? JSON.parse(data) : [];
+  console.log("💾 [STORAGE] Loaded quests:", quests.length);
+  return quests;
+};
+
+// Phase 3: Perfect Days tracking (for achievement evaluation)
+export const savePerfectDays = async (
+  userId: string,
+  dates: string[]
+): Promise<void> => {
+  console.log("💾 [STORAGE] Saving perfect days:", dates.length);
+  const key = `${STORAGE_KEYS.PERFECT_DAYS}:${userId}`;
+  await AsyncStorage.setItem(key, JSON.stringify(dates));
+};
+
+export const loadPerfectDays = async (userId: string): Promise<string[]> => {
+  console.log("💾 [STORAGE] Loading perfect days for:", userId);
+  const key = `${STORAGE_KEYS.PERFECT_DAYS}:${userId}`;
+  const data = await AsyncStorage.getItem(key);
+  const dates = data ? JSON.parse(data) : [];
+  console.log("💾 [STORAGE] Loaded perfect days:", dates.length);
+  return dates;
 };

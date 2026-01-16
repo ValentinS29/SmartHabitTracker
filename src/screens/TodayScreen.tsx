@@ -17,13 +17,23 @@ import {
 } from "../services/gamification/xpService";
 
 export const TodayScreen: React.FC = () => {
-  const { habits, completions, toggleCompletion } = useHabitsStore();
+  const {
+    habits,
+    completions,
+    toggleCompletion,
+    evaluateAchievementsAndQuests,
+  } = useHabitsStore();
   const {
     addXP,
     removeXP,
     awardDailyPerfect,
     removeDailyPerfect,
     lastDailyPerfectDateKey,
+    badges,
+    quests,
+    perfectDayDates,
+    unlockBadges,
+    updateQuests,
   } = usePlayerStore();
   const [showDailyPerfect, setShowDailyPerfect] = useState(false);
   const today = getTodayKey();
@@ -55,6 +65,23 @@ export const TodayScreen: React.FC = () => {
       (xp) => addXP(xp), // onXPAwarded
       (xp) => removeXP(xp) // onXPRemoved
     );
+
+    // Evaluate achievements and quests after toggle
+    setTimeout(() => {
+      evaluateAchievementsAndQuests(
+        badges,
+        quests,
+        perfectDayDates,
+        (newBadges, badgeXP) => {
+          unlockBadges(newBadges);
+          if (badgeXP > 0) addXP(badgeXP);
+        },
+        (updatedQuests, questXP) => {
+          updateQuests(updatedQuests);
+          if (questXP > 0) addXP(questXP);
+        }
+      );
+    }, 100);
   };
 
   const renderHabit = ({ item }: { item: (typeof habits)[0] }) => {
@@ -94,7 +121,7 @@ export const TodayScreen: React.FC = () => {
   };
 
   return (
-    <Screen scrollable={false}>
+    <Screen scrollable={true}>
       <View style={styles.header}>
         <Text style={styles.title}>Today</Text>
         <Text style={styles.date}>{formatDisplayDate(today)}</Text>
@@ -111,6 +138,42 @@ export const TodayScreen: React.FC = () => {
         </View>
       )}
 
+      {/* Active Quests */}
+      {quests.filter((q) => !q.completed).length > 0 && (
+        <View style={styles.questsSection}>
+          <Text style={styles.questsTitle}>Active Quests</Text>
+          {quests
+            .filter((q) => !q.completed)
+            .map((quest) => (
+              <View key={quest.id} style={styles.questItem}>
+                <View style={styles.questHeader}>
+                  <Text style={styles.questTitle}>
+                    {quest.type === "daily" ? "📅" : "📆"} {quest.title}
+                  </Text>
+                  <Text style={styles.questReward}>+{quest.rewardXp} XP</Text>
+                </View>
+                <Text style={styles.questDescription}>{quest.description}</Text>
+                <View style={styles.progressBar}>
+                  <View
+                    style={[
+                      styles.progressFill,
+                      {
+                        width: `${Math.min(
+                          (quest.progress / quest.target) * 100,
+                          100
+                        )}%`,
+                      },
+                    ]}
+                  />
+                </View>
+                <Text style={styles.questProgress}>
+                  {quest.progress} / {quest.target}
+                </Text>
+              </View>
+            ))}
+        </View>
+      )}
+
       {habits.length === 0 ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyText}>No habits yet</Text>
@@ -119,12 +182,11 @@ export const TodayScreen: React.FC = () => {
           </Text>
         </View>
       ) : (
-        <FlatList
-          data={habits}
-          keyExtractor={(item) => item.id}
-          renderItem={renderHabit}
-          contentContainerStyle={styles.list}
-        />
+        <View style={styles.habitsList}>
+          {habits.map((habit) => (
+            <View key={habit.id}>{renderHabit({ item: habit })}</View>
+          ))}
+        </View>
       )}
     </Screen>
   );
@@ -166,6 +228,9 @@ const styles = StyleSheet.create({
     color: "#fff",
   },
   list: {
+    padding: 20,
+  },
+  habitsList: {
     padding: 20,
   },
   habitItem: {
@@ -243,5 +308,63 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#BBB",
     textAlign: "center",
+  },
+  questsSection: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    backgroundColor: "#fff",
+  },
+  questsTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#333",
+    marginBottom: 12,
+  },
+  questItem: {
+    backgroundColor: "#F0F8FF",
+    padding: 14,
+    borderRadius: 10,
+    marginBottom: 10,
+    borderLeftWidth: 4,
+    borderLeftColor: "#007AFF",
+  },
+  questHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  questTitle: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#333",
+    flex: 1,
+  },
+  questReward: {
+    fontSize: 13,
+    fontWeight: "bold",
+    color: "#34C759",
+  },
+  questDescription: {
+    fontSize: 13,
+    color: "#666",
+    marginBottom: 8,
+  },
+  progressBar: {
+    height: 6,
+    backgroundColor: "#E0E0E0",
+    borderRadius: 3,
+    overflow: "hidden",
+    marginBottom: 4,
+  },
+  progressFill: {
+    height: "100%",
+    backgroundColor: "#007AFF",
+    borderRadius: 3,
+  },
+  questProgress: {
+    fontSize: 11,
+    color: "#007AFF",
+    fontWeight: "600",
   },
 });
