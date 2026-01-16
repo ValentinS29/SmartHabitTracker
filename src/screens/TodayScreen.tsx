@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -8,22 +8,58 @@ import {
 } from "react-native";
 import { Screen } from "../components/Screen";
 import { useHabitsStore } from "../store/habits/habitsStore";
+import { usePlayerStore } from "../store/player/playerStore";
 import { getTodayKey, formatDisplayDate } from "../services/time/dateService";
+import { getCurrentStreak } from "../services/gamification/streakService";
+import {
+  getDifficultyLabel,
+  getDifficultyColor,
+} from "../services/gamification/xpService";
 
 export const TodayScreen: React.FC = () => {
   const { habits, completions, toggleCompletion } = useHabitsStore();
+  const {
+    addXP,
+    removeXP,
+    awardDailyPerfect,
+    removeDailyPerfect,
+    lastDailyPerfectDateKey,
+  } = usePlayerStore();
+  const [showDailyPerfect, setShowDailyPerfect] = useState(false);
   const today = getTodayKey();
 
   const isCompleted = (habitId: string) => {
     return completions.some((c) => c.habitId === habitId && c.date === today);
   };
 
+  const completedCount = habits.filter((h) => isCompleted(h.id)).length;
+  const allCompleted = habits.length > 0 && completedCount === habits.length;
+
+  // Check for Daily Perfect
+  useEffect(() => {
+    if (allCompleted && lastDailyPerfectDateKey !== today) {
+      // Award Daily Perfect
+      awardDailyPerfect(today);
+      setShowDailyPerfect(true);
+      setTimeout(() => setShowDailyPerfect(false), 3000);
+    } else if (!allCompleted && lastDailyPerfectDateKey === today) {
+      // Remove Daily Perfect if it was awarded today but user undid a completion
+      removeDailyPerfect();
+    }
+  }, [allCompleted, today, lastDailyPerfectDateKey]);
+
   const handleToggle = (habitId: string) => {
-    toggleCompletion(habitId, today);
+    toggleCompletion(
+      habitId,
+      today,
+      (xp) => addXP(xp), // onXPAwarded
+      (xp) => removeXP(xp) // onXPRemoved
+    );
   };
 
   const renderHabit = ({ item }: { item: (typeof habits)[0] }) => {
     const completed = isCompleted(item.id);
+    const streak = getCurrentStreak(item.id, completions);
 
     return (
       <TouchableOpacity
@@ -35,10 +71,23 @@ export const TodayScreen: React.FC = () => {
           {completed && <View style={styles.checkboxChecked} />}
         </View>
         <View style={styles.habitInfo}>
-          <Text style={styles.habitName}>{item.name}</Text>
+          <View style={styles.habitHeader}>
+            <Text style={styles.habitName}>{item.name}</Text>
+            <View
+              style={[
+                styles.difficultyBadge,
+                { backgroundColor: getDifficultyColor(item.difficulty) },
+              ]}
+            >
+              <Text style={styles.difficultyText}>
+                {getDifficultyLabel(item.difficulty)}
+              </Text>
+            </View>
+          </View>
           {item.description && (
             <Text style={styles.habitDescription}>{item.description}</Text>
           )}
+          <Text style={styles.streakText}>🔥 Streak: {streak}</Text>
         </View>
       </TouchableOpacity>
     );
@@ -49,7 +98,18 @@ export const TodayScreen: React.FC = () => {
       <View style={styles.header}>
         <Text style={styles.title}>Today</Text>
         <Text style={styles.date}>{formatDisplayDate(today)}</Text>
+        {habits.length > 0 && (
+          <Text style={styles.progress}>
+            {completedCount} / {habits.length} completed
+          </Text>
+        )}
       </View>
+
+      {showDailyPerfect && (
+        <View style={styles.dailyPerfectBanner}>
+          <Text style={styles.dailyPerfectText}>🎉 Daily Perfect! +25 XP</Text>
+        </View>
+      )}
 
       {habits.length === 0 ? (
         <View style={styles.emptyState}>
@@ -86,6 +146,25 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#666",
   },
+  progress: {
+    fontSize: 14,
+    color: "#007AFF",
+    marginTop: 8,
+    fontWeight: "600",
+  },
+  dailyPerfectBanner: {
+    backgroundColor: "#34C759",
+    padding: 16,
+    marginHorizontal: 20,
+    marginTop: 10,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  dailyPerfectText: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#fff",
+  },
   list: {
     padding: 20,
   },
@@ -116,15 +195,37 @@ const styles = StyleSheet.create({
   habitInfo: {
     flex: 1,
   },
+  habitHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 4,
+  },
   habitName: {
     fontSize: 16,
     fontWeight: "600",
     color: "#333",
-    marginBottom: 2,
+  },
+  difficultyBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  difficultyText: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: "#fff",
+    textTransform: "uppercase",
   },
   habitDescription: {
     fontSize: 14,
     color: "#666",
+  },
+  streakText: {
+    fontSize: 12,
+    color: "#FF9500",
+    marginTop: 4,
+    fontWeight: "600",
   },
   emptyState: {
     flex: 1,

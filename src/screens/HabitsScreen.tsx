@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import {
   View,
   Text,
@@ -10,6 +10,11 @@ import {
 import { Screen } from "../components/Screen";
 import { Button } from "../components/Button";
 import { useHabitsStore } from "../store/habits/habitsStore";
+import { getCurrentStreak } from "../services/gamification/streakService";
+import {
+  getDifficultyLabel,
+  getDifficultyColor,
+} from "../services/gamification/xpService";
 
 interface HabitsScreenProps {
   onAddHabit: () => void;
@@ -20,7 +25,7 @@ export const HabitsScreen: React.FC<HabitsScreenProps> = ({
   onAddHabit,
   onEditHabit,
 }) => {
-  const { habits, deleteHabit } = useHabitsStore();
+  const { habits, completions, deleteHabit } = useHabitsStore();
 
   const handleDelete = (habitId: string, habitName: string) => {
     Alert.alert(
@@ -38,13 +43,28 @@ export const HabitsScreen: React.FC<HabitsScreenProps> = ({
   };
 
   const renderHabit = ({ item }: { item: (typeof habits)[0] }) => {
+    const streak = getCurrentStreak(item.id, completions);
+
     return (
       <View style={styles.habitItem}>
         <View style={styles.habitInfo}>
-          <Text style={styles.habitName}>{item.name}</Text>
+          <View style={styles.habitHeader}>
+            <Text style={styles.habitName}>{item.name}</Text>
+            <View
+              style={[
+                styles.difficultyBadge,
+                { backgroundColor: getDifficultyColor(item.difficulty) },
+              ]}
+            >
+              <Text style={styles.difficultyText}>
+                {getDifficultyLabel(item.difficulty)}
+              </Text>
+            </View>
+          </View>
           {item.description && (
             <Text style={styles.habitDescription}>{item.description}</Text>
           )}
+          <Text style={styles.streakText}>🔥 Streak: {streak}</Text>
         </View>
         <View style={styles.actions}>
           <TouchableOpacity
@@ -115,17 +135,39 @@ const styles = StyleSheet.create({
   },
   habitInfo: {
     marginBottom: 12,
+    flex: 1,
+  },
+  habitHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 4,
   },
   habitName: {
     fontSize: 18,
     fontWeight: "600",
     color: "#333",
-    marginBottom: 4,
+  },
+  difficultyBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  difficultyText: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: "#fff",
+    textTransform: "uppercase",
   },
   habitDescription: {
     fontSize: 14,
     color: "#666",
     marginBottom: 4,
+  },
+  streakText: {
+    fontSize: 12,
+    color: "#FF9500",
+    fontWeight: "600",
   },
   actions: {
     flexDirection: "row",

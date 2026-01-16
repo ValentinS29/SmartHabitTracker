@@ -1,7 +1,8 @@
 import { create } from "zustand";
-import { Habit, Completion } from "../../types";
+import { Habit, Completion, Difficulty } from "../../types";
 import * as storageService from "../../services/storage/storageService";
 import { generateId } from "../../utils/id";
+import { calculateHabitXP } from "../../services/gamification/xpService";
 
 interface HabitsState {
   habits: Habit[];
@@ -12,15 +13,22 @@ interface HabitsState {
   addHabit: (
     userId: string,
     name: string,
-    description?: string
+    description?: string,
+    difficulty?: Difficulty
   ) => Promise<void>;
   updateHabit: (
     habitId: string,
     name: string,
-    description?: string
+    description?: string,
+    difficulty?: Difficulty
   ) => Promise<void>;
   deleteHabit: (habitId: string) => Promise<void>;
-  toggleCompletion: (habitId: string, date: string) => Promise<void>;
+  toggleCompletion: (
+    habitId: string,
+    date: string,
+    onXPAwarded?: (xp: number) => void,
+    onXPRemoved?: (xp: number) => void
+  ) => Promise<void>;
 }
 
 export const useHabitsStore = create<HabitsState>((set, get) => ({
@@ -36,8 +44,13 @@ export const useHabitsStore = create<HabitsState>((set, get) => ({
       const habits = await storageService.loadHabits();
       const completions = await storageService.loadCompletions();
 
-      // Filter habits by userId
-      const userHabits = habits.filter((h) => h.userId === userId);
+      // Filter habits by userId and ensure difficulty field exists (Phase 2 migration)
+      const userHabits = habits
+        .filter((h) => h.userId === userId)
+        .map((h) => ({
+          ...h,
+          difficulty: h.difficulty || "easy", // Default to easy for Phase 1 habits
+        }));
 
       set({ habits: userHabits, completions, isLoading: false });
       console.log(
@@ -52,31 +65,54 @@ export const useHabitsStore = create<HabitsState>((set, get) => ({
     }
   },
 
-  addHabit: async (userId: string, name: string, description?: string) => {
+  addHabit: async (
+    userId: string,
+    name: string,
+    description?: string,
+    difficulty: Difficulty = "easy"
+  ) => {
     try {
-      console.log("🏪 [HABITS STORE] Adding habit:", name);
+      console.log(
+        "🏪 [HABITS STORE] Adding habit:",
+        name,
+        "Difficulty:",
+        difficulty
+      );
       const newHabit: Habit = {
         id: generateId(),
         userId,
         name,
         description,
+        difficulty, // Phase 2
         createdAt: new Date().toISOString(),
       };
 
       const updatedHabits = [...get().habits, newHabit];
       set({ habits: updatedHabits });
       await storageService.saveHabits(updatedHabits);
-      console.log("✅ [HABITS STORE] Habit added:", newHabit.id);
-    } catch (error: any) {
-      console.error("❌ [HABITS STORE] Add habit error:", error.message);
+      console.log("✅ [HABITS STORE] Habit added successfully");
+    } catch (error) {
+      console.error("❌ [HABITS STORE] Failed to add habit:", error);
     }
   },
 
-  updateHabit: async (habitId: string, name: string, description?: string) => {
+  updateHabit: async (
+    habitId: string,
+    name: string,
+    description?: string,
+    difficulty?: Difficulty
+  ) => {
     try {
       console.log("🏪 [HABITS STORE] Updating habit:", habitId);
       const updatedHabits = get().habits.map((h) =>
-        h.id === habitId ? { ...h, name, description } : h
+        h.id === habitId
+          ? {
+              ...h,
+              name,
+              description,
+              ...(difficulty && { difficulty }), // Only update if provided
+            }
+          : h
       );
 
       set({ habits: updatedHabits });
@@ -104,29 +140,56 @@ export const useHabitsStore = create<HabitsState>((set, get) => ({
     }
   },
 
-  toggleCompletion: async (habitId: string, date: string) => {
+  toggleCompletion: async (
+    habitId: string,
+    date: string,
+    onXPAwarded?: (xp: number) => void,
+    onXPRemoved?: (xp: number) => void
+  ) => {
     try {
       console.log("🏪 [HABITS STORE] Toggling completion:", habitId, date);
       const existingIndex = get().completions.findIndex(
         (c) => c.habitId === habitId && c.date === date
       );
 
+      const habit = get().habits.find((h) => h.id === habitId);
+      if (!habit) {
+        console.error("❌ [HABITS STORE] Habit not found:", habitId);
+        return;
+      }
+
       let updatedCompletions: Completion[];
       if (existingIndex >= 0) {
-        // Remove completion
+        // Remove completion - undo XP
+        const removedCompletion = get().completions[existingIndex];
+        const xpToRemove = removedCompletion.xpAwarded || 0;
+
         updatedCompletions = get().completions.filter(
           (_, i) => i !== existingIndex
         );
-        console.log("✅ [HABITS STORE] Completion removed");
+        console.log("✅ [HABITS STORE] Completion removed, XP:", xpToRemove);
+
+        if (onXPRemoved && xpToRemove > 0) {
+          onXPRemoved(xpToRemove);
+        }
       } else {
-        // Add completion
+        // Add completion - award XP
+        const xpAwarded = calculateHabitXP(habit.difficulty);
         const newCompletion: Completion = {
           habitId,
           date,
           completedAt: new Date().toISOString(),
+          xpAwarded, // Phase 2
         };
         updatedCompletions = [...get().completions, newCompletion];
-        console.log("✅ [HABITS STORE] Completion added");
+        console.log(
+          "✅ [HABITS STORE] Completion added, XP awarded:",
+          xpAwarded
+        );
+
+        if (onXPAwarded) {
+          onXPAwarded(xpAwarded);
+        }
       }
 
       set({ completions: updatedCompletions });

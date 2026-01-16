@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, Alert } from "react-native";
+import { View, Text, StyleSheet, Alert, TouchableOpacity } from "react-native";
 import { Screen } from "../components/Screen";
 import { Input } from "../components/Input";
 import { Button } from "../components/Button";
 import { useHabitsStore } from "../store/habits/habitsStore";
 import { useAuthStore } from "../store/auth/authStore";
-import type { Habit } from "../types";
+import type { Difficulty } from "../types";
+import { getDifficultyColor } from "../services/gamification/xpService";
 
 interface AddEditHabitScreenProps {
   habitId?: string;
@@ -20,6 +21,7 @@ export const AddEditHabitScreen: React.FC<AddEditHabitScreenProps> = ({
   const { user } = useAuthStore();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [difficulty, setDifficulty] = useState<Difficulty>("easy");
   const [isLoading, setIsLoading] = useState(false);
 
   const isEditing = !!habitId;
@@ -29,6 +31,7 @@ export const AddEditHabitScreen: React.FC<AddEditHabitScreenProps> = ({
     if (existingHabit) {
       setName(existingHabit.name);
       setDescription(existingHabit.description || "");
+      setDifficulty(existingHabit.difficulty);
     }
   }, [existingHabit]);
 
@@ -47,9 +50,9 @@ export const AddEditHabitScreen: React.FC<AddEditHabitScreenProps> = ({
 
     try {
       if (isEditing && habitId) {
-        updateHabit(habitId, name.trim(), description.trim());
+        updateHabit(habitId, name.trim(), description.trim(), difficulty);
       } else {
-        addHabit(user.id, name.trim(), description.trim());
+        addHabit(user.id, name.trim(), description.trim(), difficulty);
       }
 
       Alert.alert(
@@ -63,6 +66,13 @@ export const AddEditHabitScreen: React.FC<AddEditHabitScreenProps> = ({
       setIsLoading(false);
     }
   };
+
+  const difficultyOptions: { value: Difficulty; label: string; xp: number }[] =
+    [
+      { value: "easy", label: "Easy", xp: 10 },
+      { value: "medium", label: "Medium", xp: 15 },
+      { value: "hard", label: "Hard", xp: 20 },
+    ];
 
   return (
     <Screen scrollable={true}>
@@ -86,6 +96,45 @@ export const AddEditHabitScreen: React.FC<AddEditHabitScreenProps> = ({
           onChangeText={setDescription}
           placeholder="Add details about this habit"
         />
+
+        <View style={styles.difficultySection}>
+          <Text style={styles.difficultyLabel}>Difficulty</Text>
+          <View style={styles.difficultyButtons}>
+            {difficultyOptions.map((option) => {
+              const isSelected = difficulty === option.value;
+              return (
+                <TouchableOpacity
+                  key={option.value}
+                  style={[
+                    styles.difficultyButton,
+                    isSelected && {
+                      backgroundColor: getDifficultyColor(option.value),
+                      borderColor: getDifficultyColor(option.value),
+                    },
+                  ]}
+                  onPress={() => setDifficulty(option.value)}
+                >
+                  <Text
+                    style={[
+                      styles.difficultyButtonText,
+                      isSelected && styles.difficultyButtonTextSelected,
+                    ]}
+                  >
+                    {option.label}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.difficultyXP,
+                      isSelected && styles.difficultyXPSelected,
+                    ]}
+                  >
+                    +{option.xp} XP
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
 
         <View style={styles.actions}>
           <Button
@@ -119,6 +168,46 @@ const styles = StyleSheet.create({
   form: {
     padding: 20,
     gap: 20,
+  },
+  difficultySection: {
+    marginTop: 8,
+  },
+  difficultyLabel: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#333",
+    marginBottom: 12,
+  },
+  difficultyButtons: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  difficultyButton: {
+    flex: 1,
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: "#e0e0e0",
+    backgroundColor: "#fff",
+    alignItems: "center",
+  },
+  difficultyButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#333",
+    marginBottom: 4,
+  },
+  difficultyButtonTextSelected: {
+    color: "#fff",
+  },
+  difficultyXP: {
+    fontSize: 12,
+    color: "#666",
+  },
+  difficultyXPSelected: {
+    color: "#fff",
+    opacity: 0.9,
   },
   actions: {
     flexDirection: "row",

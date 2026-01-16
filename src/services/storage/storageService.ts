@@ -1,10 +1,11 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Habit, Completion, User } from "../../types";
+import { Habit, Completion, User, Player } from "../../types";
 
 const STORAGE_KEYS = {
-  HABITS: "@smart_habit_tracker/habits",
-  COMPLETIONS: "@smart_habit_tracker/completions",
+  HABITS: "@smart_habit_tracker/habits:v2", // Phase 2: versioned
+  COMPLETIONS: "@smart_habit_tracker/completions:v2", // Phase 2: versioned
   USER: "@smart_habit_tracker/user",
+  PLAYER: "@smart_habit_tracker/player:v1", // Phase 2: new
 };
 
 export const saveHabits = async (habits: Habit[]): Promise<void> => {
@@ -53,4 +54,32 @@ export const loadUser = async (): Promise<User | null> => {
   const user = data ? JSON.parse(data) : null;
   console.log("💾 [STORAGE] Loaded user:", user?.email || "None");
   return user;
+};
+
+export const savePlayer = async (player: Player): Promise<void> => {
+  console.log(
+    "💾 [STORAGE] Saving player:",
+    player.userId,
+    "Level:",
+    player.level
+  );
+  await AsyncStorage.setItem(STORAGE_KEYS.PLAYER, JSON.stringify(player));
+};
+
+export const loadPlayer = async (userId: string): Promise<Player | null> => {
+  console.log("💾 [STORAGE] Loading player for:", userId);
+  const data = await AsyncStorage.getItem(STORAGE_KEYS.PLAYER);
+  const player = data ? JSON.parse(data) : null;
+
+  // Verify the player belongs to this user
+  if (player && player.userId !== userId) {
+    console.log("💾 [STORAGE] Player userId mismatch, returning null");
+    return null;
+  }
+
+  console.log(
+    "💾 [STORAGE] Loaded player:",
+    player ? `Level ${player.level}` : "None"
+  );
+  return player;
 };

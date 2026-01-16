@@ -10,16 +10,18 @@ import {
 } from "react-native";
 import { LoginScreen } from "./src/screens/LoginScreen";
 import { RegisterScreen } from "./src/screens/RegisterScreen";
-import { TodayScreen } from "./src/screens/TodayScreen";
-import { HabitsScreen } from "./src/screens/HabitsScreen";
-import { ProfileScreen } from "./src/screens/ProfileScreen";
-import { AddEditHabitScreen } from "./src/screens/AddEditHabitScreen";
+import { TodayScreen } from "./src/screens/TodayScreen.tsx";
+import { HabitsScreen } from "./src/screens/HabitsScreen.tsx";
+import { ProfileScreen } from "./src/screens/ProfileScreen.tsx";
+import { AddEditHabitScreen } from "./src/screens/AddEditHabitScreen.tsx";
 import { useAuthStore } from "./src/store/auth/authStore";
 import { useHabitsStore } from "./src/store/habits/habitsStore";
+import { usePlayerStore } from "./src/store/player/playerStore";
 
 export default function App() {
   const { initialize, isLoading, user } = useAuthStore();
   const { loadData } = useHabitsStore();
+  const { loadPlayer } = usePlayerStore();
   const [showRegister, setShowRegister] = useState(false);
   const [activeTab, setActiveTab] = useState("today");
   const [showAddEditModal, setShowAddEditModal] = useState(false);
@@ -32,8 +34,9 @@ export default function App() {
 
   useEffect(() => {
     if (user) {
-      console.log("🧭 [APP] User logged in, loading habits data");
+      console.log("🧭 [APP] User logged in, loading habits and player data");
       loadData(user.id);
+      loadPlayer(user.id); // Phase 2
     }
   }, [user]);
 
